@@ -3,6 +3,10 @@ scriptname=$(readlink -f $0)
 mypath=$(dirname $scriptname)
 . "${mypath}/config.sh"
 [ -z "$idoit_url" ] && idoit_url="https://localhost/"
+[ -z "$zabbix_category" ] && echo "please specify zabbix_category" && exit 1
+[ -z "$trigger_id_name" ] && echo "please specify trigger_id_name" && exit 1
+[ -z "$trigger_name_name" ] && echo "please specify trigger_name_name" && exit 1
+[ -z "$trigger_date_name" ] && echo "please specify trigger_date_name" && exit 1
 
 object_id=$1
 zabbix_status=$2
@@ -35,24 +39,24 @@ idoit_request() {
 #7: defect
 #6: in operation
 
-current_triggers=$(idoit_request "cmdb.category.read" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS")
+current_triggers=$(idoit_request "cmdb.category.read" "$zabbix_category")
 
 case $zabbix_status in
 OK)
   #only try to delete if present
-  if echo $current_triggers | grep "\"f_text_c_1447146100601\":\"${trigger_id}\"" >/dev/null; then 
-    id=$(echo $current_triggers |sed -rne "s/.+id\":\"([0-9]+).*\"f_text_c_1447146100601\":\"${trigger_id}\".*/\1/gp")
-    idoit_request "cmdb.category.delete" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS" "\"id\":${id}" > /dev/null
+  if echo $current_triggers | grep "\"${trigger_id_name}\":\"${trigger_id}\"" >/dev/null; then 
+    id=$(echo $current_triggers |sed -rne "s/.+id\":\"([0-9]+).*\"${trigger_id_name}\":\"${trigger_id}\".*/\1/gp")
+    idoit_request "cmdb.category.delete" "$zabbix_category" "\"id\":${id}" > /dev/null
   fi
   ;;
 *)  #only add if not already added
-  if echo $current_triggers | grep -v "\"f_text_c_1447146100601\":\"${trigger_id}\"" >/dev/null; then 
-    idoit_request "cmdb.category.create" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS" "\"data\":{\"category_id\":1,\"f_text_c_1447146011419\":\"${trigger_name}\",\"f_text_c_1447146100601\":\"${trigger_id}\",\"f_text_c_1447146742919\":\"${date}\"}" > /dev/null
+  if echo $current_triggers | grep -v "\"${trigger_id_name}\":\"${trigger_id}\"" >/dev/null; then 
+    idoit_request "cmdb.category.create" "$zabbix_category" "\"data\":{\"category_id\":1,\"${trigger_name_name}\":\"${trigger_name}\",\"${trigger_id_name}\":\"${trigger_id}\",\"${trigger_date_name}\":\"${date}\"}" > /dev/null
   fi
   ;;
 esac
 
-current_triggers=$(idoit_request "cmdb.category.read" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS")
+current_triggers=$(idoit_request "cmdb.category.read" "$zabbix_category")
 
 if echo $current_triggers | grep '\[\]' >/dev/null; then
   new_status="6"
