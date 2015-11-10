@@ -1,0 +1,63 @@
+#!/bin/sh
+scriptname=$(readlink -f $0)
+mypath=$(dirname $scriptname)
+. "${mypath}/config.sh"
+[ -z "$idoit_url" ] && idoit_url="https://localhost/"
+
+object_id=$1
+zabbix_status=$2
+trigger_id=$3
+trigger_name=$4
+
+date=$(date)
+
+idoit_request() {
+ method=$1
+ category=$2
+ payload=$3
+
+ params="{\"apikey\":\"${api_key}\",\"objID\":${object_id},\"category\":\"${category}\""
+ if [ -n "$payload" ]; then
+  params="${params},${payload}"
+ fi 
+ params="${params}}"
+ data="{\"version\":\"2.0\",\"method\":\"${method}\",\"params\":${params},\"id\":10}"
+
+ curl -s -H "Content-Type: application/json" -X POST --data "${data}" "${idoit_url}/src/jsonrpc.php"  
+}
+
+#echo "test" > /tmp/run
+#echo "$1" > /tmp/to.debug
+#echo "$2" > /tmp/subject.debug
+#echo "$3" > /tmp/body.debug
+
+#i-doit status:
+#7: defect
+#6: in operation
+
+current_triggers=$(idoit_request "cmdb.category.read" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS")
+
+case $zabbix_status in
+OK)
+  #only try to delete if present
+  if echo $current_triggers | grep "\"f_text_c_1447146100601\":\"${trigger_id}\"" >/dev/null; then 
+    id=$(echo $current_triggers |sed -rne "s/.+id\":\"([0-9]+).*\"f_text_c_1447146100601\":\"${trigger_id}\".*/\1/gp")
+    idoit_request "cmdb.category.delete" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS" "\"id\":${id}" > /dev/null
+  fi
+  ;;
+*)  #only add if not already added
+  if echo $current_triggers | grep -v "\"f_text_c_1447146100601\":\"${trigger_id}\"" >/dev/null; then 
+    idoit_request "cmdb.category.create" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS" "\"data\":{\"category_id\":1,\"f_text_c_1447146011419\":\"${trigger_name}\",\"f_text_c_1447146100601\":\"${trigger_id}\",\"f_text_c_1447146742919\":\"${date}\"}" > /dev/null
+  fi
+  ;;
+esac
+
+current_triggers=$(idoit_request "cmdb.category.read" "C__CATG__CUSTOM_FIELDS_ACTIVEZABBIXTRIGGERS")
+
+if echo $current_triggers | grep '\[\]' >/dev/null; then
+  new_status="6"
+else
+  new_status="7"
+fi
+
+idoit_request "cmdb.category.update" "C__CATG__GLOBAL" "\"data\":{\"cmdb_status\":\"${new_status}\"}" > /dev/null
