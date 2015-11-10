@@ -13,6 +13,9 @@ zabbix_status=$2
 trigger_id=$3
 trigger_name=$4
 
+#The host has no object id configured
+[ -z "$object_id" ] && exit 0
+
 date=$(date)
 
 idoit_request() {
